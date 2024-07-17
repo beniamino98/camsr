@@ -10,13 +10,12 @@
 
 cams_solar_radiation <- R6::R6Class("cams_solar_radiation",
                           public = list(
-                            initialize = function(dir_db = "databases/CAMS",
-                                                  init_db = FALSE,
-                                                  init_locations = FALSE){
+                            initialize = function(dir_db = "databases/CAMS", init_db = FALSE,
+                                                  dir_l0 = "l0/solar", dir_l1 = "l1/solar",
+                                                  init_locations = FALSE, locations = NULL){
                               private$dir_db <- dir_db
-                              private$dir_l0 <- file.path(dir_db, "l0/solar")
-                              private$dir_l1 <- file.path(dir_db, "l1/solar")
-                              private$..locations <- init_CAMS_locations()
+                              private$dir_l0 <- file.path(dir_db, dir_l0)
+                              private$dir_l1 <- file.path(dir_db, dir_l1)
 
                               if (init_db) {
                                 system(paste0("mkdir ", private$dir_db))
@@ -24,7 +23,7 @@ cams_solar_radiation <- R6::R6Class("cams_solar_radiation",
                                 system(paste0("mkdir ", private$dir_db, "/l1"))
                                 system(paste0("mkdir ", private$dir_l0))
                                 system(paste0("mkdir ", private$dir_l1))
-                                system(paste0("mkdir ", private$dir_db, "/l0/solar/metadata"))
+                                system(paste0("mkdir ", file.path(private$dir_db, dir_l0, "metadata")))
                               }
 
                               if (init_locations) {
@@ -32,8 +31,13 @@ cams_solar_radiation <- R6::R6Class("cams_solar_radiation",
                                 readr::write_csv(locations, file = file.path(private$dir_l0, "0-locations.csv"))
                                 readr::write_csv(locations, file = file.path(private$dir_l1, "0-locations.csv"))
                               } else {
-                                locations <- readr::read_csv(file = file.path(private$dir_l1, "0-locations.csv"),
-                                                             show_col_types = FALSE, progress = FALSE)
+                                if (is.null(locations)){
+                                  locations <- readr::read_csv(file = file.path(private$dir_l1, "0-locations.csv"),
+                                                               show_col_types = FALSE, progress = FALSE)
+                                } else {
+                                  readr::write_csv(locations, file = file.path(private$dir_l0, "0-locations.csv"))
+                                  readr::write_csv(locations, file = file.path(private$dir_l1, "0-locations.csv"))
+                                }
                               }
                               private$..locations <- locations
                             },
@@ -41,9 +45,9 @@ cams_solar_radiation <- R6::R6Class("cams_solar_radiation",
                             add = function(place, lat, lon, alt){
 
                               if (!(place %in% private$..locations$place)){
-                                new_loc <- tibble(place = place, lat = lat, lon = lon, alt = alt,
-                                                  from = as_date(NA), to = as_date(NA), nobs = 0)
-                                private$..locations <- bind_rows(private$..locations, new_loc)
+                                new_loc <- dplyr::tibble(place = place, lat = lat, lon = lon, alt = alt,
+                                                  from = lubridate::as_date(NA), to = lubridate::as_date(NA), nobs = 0)
+                                private$..locations <- dplyr::bind_rows(private$..locations, new_loc)
                                 readr::write_csv(private$..locations, file = file.path(private$dir_l0, "0-locations.csv"))
                                 readr::write_csv(private$..locations, file = file.path(private$dir_l1, "0-locations.csv"))
                               } else {
@@ -57,6 +61,9 @@ cams_solar_radiation <- R6::R6Class("cams_solar_radiation",
                               lat <- private$..locations[private$..locations$place == place,]$lat
                               lon <- private$..locations[private$..locations$place == place,]$lon
                               alt <- private$..locations[private$..locations$place == place,]$alt
+                              if (is.na(alt)) {
+                                alt <- NULL
+                              }
                               # File Name in Temp (as csv file)
                               filename <- paste0(place, ".csv")
                               filepath <- file.path(private$dir_l0, filename)
